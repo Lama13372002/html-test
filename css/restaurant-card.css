@@ -1,12 +1,14 @@
 /* Стили для новой карточки ресторана */
 .restaurant-info-card {
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(10px);
 }
 
 .restaurant-info-card:hover {
-  transform: translateY(-8px);
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+  transform: translateY(-5px);
+  box-shadow: 0 12px 48px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 
 /* Hover эффекты для социальных сетей */
@@ -45,11 +47,11 @@
 /* Адаптивные стили */
 @media (max-width: 809px) {
   .restaurant-info-card {
-    border-radius: 12px !important;
+    border-radius: 16px !important;
   }
 
   .card-content {
-    padding: 20px !important;
+    padding: 24px !important;
   }
 
   .restaurant-info-card img[alt*="Logo"] {
@@ -63,6 +65,6 @@
   }
 
   .card-content {
-    padding: 22px !important;
+    padding: 28px !important;
   }
 }
