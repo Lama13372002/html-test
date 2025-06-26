@@ -587,5 +587,283 @@
       </div>
     </div>
     <script src="js/hamburger-menu.js"></script>
+
+    <!-- Автоматическое обновление рабочих часов -->
+    <script>
+    class RestaurantHoursUpdater {
+      constructor() {
+        this.apiUrl = '/api/restaurant/working-hours.php';
+        this.updateInterval = 5 * 60 * 1000; // 5 минут
+        this.lastUpdateTime = null;
+        this.isUpdating = false;
+
+        // Маппинг дней недели
+        this.dayMapping = {
+          'Monday': 'monday',
+          'Tuesday': 'tuesday',
+          'Wednesday': 'wednesday',
+          'Thursday': 'thursday',
+          'Friday': 'friday',
+          'Saturday': 'saturday',
+          'Sunday': 'sunday'
+        };
+
+        this.statusColors = {
+          'green': 'rgb(34, 197, 94)',
+          'yellow': 'rgb(234, 179, 8)',
+          'red': 'rgb(239, 68, 68)'
+        };
+
+        this.init();
+      }
+
+      async init() {
+        console.log('🍽️ Инициализация системы автоматического обновления рабочих часов');
+
+        // Ждем полной загрузки страницы
+        if (document.readyState === 'loading') {
+          document.addEventListener('DOMContentLoaded', () => this.start());
+        } else {
+          this.start();
+        }
+      }
+
+      start() {
+        // Проверяем наличие карточки ресторана
+        const restaurantCard = document.querySelector('.restaurant-info-card');
+        if (!restaurantCard) {
+          console.warn('⚠️ Карточка ресторана не найдена');
+          return;
+        }
+
+        console.log('✅ Карточка ресторана найдена, запускаем автообновление');
+
+        // Загружаем данные сразу
+        this.loadWorkingHours();
+
+        // Настраиваем периодическое обновление
+        setInterval(() => this.loadWorkingHours(), this.updateInterval);
+
+        // Обновляем при фокусе на страницу
+        document.addEventListener('visibilitychange', () => {
+          if (!document.hidden) {
+            this.loadWorkingHours();
+          }
+        });
+      }
+
+      async loadWorkingHours() {
+        if (this.isUpdating) return;
+
+        this.isUpdating = true;
+
+        try {
+          console.log('🔄 Загружаем рабочие часы...');
+
+          const response = await fetch(this.apiUrl, {
+            method: 'GET',
+            headers: {
+              'Cache-Control': 'no-cache'
+            }
+          });
+
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+          }
+
+          const result = await response.json();
+
+          if (result.success && result.data && result.data.workingHours) {
+            this.updateDisplay(result.data.workingHours);
+            this.lastUpdateTime = new Date();
+            console.log(`✅ Рабочие часы обновлены: ${this.lastUpdateTime.toLocaleTimeString()}`);
+          } else {
+            console.warn('⚠️ Получены некорректные данные:', result);
+          }
+
+        } catch (error) {
+          console.error('❌ Ошибка загрузки рабочих часов:', error);
+
+          // При ошибке показываем уведомление разработчику (только в консоли)
+          if (error.message.includes('404')) {
+            console.info('💡 Подсказка: Разместите файл working-hours-api.php по пути /api/restaurant/working-hours.php на сервере');
+          }
+        } finally {
+          this.isUpdating = false;
+        }
+      }
+
+      updateDisplay(workingHours) {
+        const restaurantCard = document.querySelector('.restaurant-info-card');
+        if (!restaurantCard) return;
+
+        // Находим все строки с днями недели
+        const dayElements = this.findDayElements(restaurantCard);
+
+        Object.entries(this.dayMapping).forEach(([dayName, dayKey]) => {
+          const dayElement = dayElements[dayName];
+          const hoursData = workingHours[dayKey];
+
+          if (dayElement && hoursData) {
+            this.updateDayElement(dayElement, hoursData);
+          }
+        });
+      }
+
+      findDayElements(container) {
+        const dayElements = {};
+
+        // Ищем элементы по содержимому текста
+        Object.keys(this.dayMapping).forEach(dayName => {
+          const spans = container.querySelectorAll('span');
+
+          for (const span of spans) {
+            if (span.textContent.trim() === dayName) {
+              // Находим родительский контейнер дня
+              let dayContainer = span.parentElement;
+              while (dayContainer && !dayContainer.style.display?.includes('flex')) {
+                dayContainer = dayContainer.parentElement;
+              }
+
+              if (dayContainer) {
+                dayElements[dayName] = dayContainer;
+              }
+              break;
+            }
+          }
+        });
+
+        return dayElements;
+      }
+
+      updateDayElement(dayElement, hoursData) {
+        // Находим элемент времени
+        const timeElement = this.findTimeElement(dayElement);
+        if (timeElement) {
+          const timeText = hoursData.isOpen
+            ? `${hoursData.open} — ${hoursData.close}`
+            : 'Закрыто';
+
+          if (timeElement.textContent !== timeText) {
+            timeElement.textContent = timeText;
+
+            // Анимация изменения
+            timeElement.style.transition = 'color 0.3s ease';
+            timeElement.style.color = hoursData.isOpen
+              ? 'rgb(239, 231, 210)'
+              : 'rgba(239, 231, 210, 0.6)';
+          }
+        }
+
+        // Находим и обновляем индикатор статуса
+        const statusElement = this.findStatusElement(dayElement);
+        if (statusElement && this.statusColors[hoursData.status]) {
+          const newColor = this.statusColors[hoursData.status];
+          if (statusElement.style.backgroundColor !== newColor) {
+            statusElement.style.transition = 'background-color 0.3s ease';
+            statusElement.style.backgroundColor = newColor;
+          }
+        }
+
+        // Обновляем стили контейнера в зависимости от статуса
+        this.updateContainerStyle(dayElement, hoursData);
+      }
+
+      findTimeElement(dayContainer) {
+        // Ищем элемент с временем (содержит формат XX:XX)
+        const spans = dayContainer.querySelectorAll('span');
+
+        for (const span of spans) {
+          const text = span.textContent.trim();
+          if (text.match(/\d{1,2}:\d{2}/) || text === 'Закрыто') {
+            return span;
+          }
+        }
+
+        return null;
+      }
+
+      findStatusElement(dayContainer) {
+        // Ищем круглый индикатор статуса
+        const spans = dayContainer.querySelectorAll('span');
+
+        for (const span of spans) {
+          const style = span.style;
+          if (style.borderRadius === '50%' && style.width === '6px') {
+            return span;
+          }
+        }
+
+        return null;
+      }
+
+      updateContainerStyle(dayContainer, hoursData) {
+        // Обновляем прозрачность и стили в зависимости от статуса
+        let opacity, backgroundOpacity, borderOpacity;
+
+        switch (hoursData.status) {
+          case 'green':
+            opacity = '0.95';
+            backgroundOpacity = '0.05';
+            borderOpacity = '0.1';
+            break;
+          case 'yellow':
+            opacity = '0.9';
+            backgroundOpacity = '0.08';
+            borderOpacity = '0.15';
+            break;
+          case 'red':
+            opacity = '0.8';
+            backgroundOpacity = '0.03';
+            borderOpacity = '0.08';
+            break;
+          default:
+            return;
+        }
+
+        // Плавное обновление стилей
+        dayContainer.style.transition = 'all 0.3s ease';
+
+        // Обновляем фон и границу
+        const currentStyle = dayContainer.style;
+        if (currentStyle.background) {
+          currentStyle.background = `rgba(255, 255, 255, ${backgroundOpacity})`;
+        }
+        if (currentStyle.border) {
+          currentStyle.border = `1px solid rgba(239, 231, 210, ${borderOpacity})`;
+        }
+      }
+
+      // Метод для ручного обновления (для отладки)
+      manualUpdate() {
+        console.log('🔄 Ручное обновление рабочих часов...');
+        this.loadWorkingHours();
+      }
+
+      // Получение статуса системы
+      getStatus() {
+        return {
+          isUpdating: this.isUpdating,
+          lastUpdate: this.lastUpdateTime,
+          updateInterval: this.updateInterval / 1000 / 60 + ' минут',
+          apiUrl: this.apiUrl
+        };
+      }
+    }
+
+    // Инициализируем систему автообновления
+    const restaurantUpdater = new RestaurantHoursUpdater();
+
+    // Делаем доступным в глобальной области для отладки
+    window.restaurantUpdater = restaurantUpdater;
+
+    // Вспомогательные функции для разработчика
+    window.updateHoursNow = () => restaurantUpdater.manualUpdate();
+    window.getUpdateStatus = () => restaurantUpdater.getStatus();
+
+    console.log('🍽️ Система автоматического обновления рабочих часов готова!');
+    console.log('💡 Для ручного обновления: updateHoursNow()');
+    console.log('📊 Для проверки статуса: getUpdateStatus()');
+    </script>
   </body>
 </html>
